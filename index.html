@@ -66,7 +66,7 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     // ✅ حطي رابط الـWeb App النهائي (بعد Deploy الجديد)
-    const API_URL = "https://script.google.com/macros/s/AKfycbw4FMsEjSz3Y2sH2jayqsKWQcN-8PWcjbqKSmFTW7FMKNluro5pdbI31QHvERPHrMnVvg/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbyRflzDD4G2LEV0uDSvbOGTBB_Jqr5Ofqr2Ov8lHpAhmWPPL6OuXEG7ALZS6mg_U3TQfw/exec";
 
     const elName = document.getElementById("name");
     const elTitle = document.getElementById("title");
@@ -121,8 +121,8 @@
         .replaceAll("'", "&#039;");
     }
 
-    // ✅ تصغير + ضغط الصورة قبل الإرسال (بحل مشاكل الحجم)
-    async function compressImageToDataUrl(file, maxW = 1280, quality = 0.82) {
+    // ✅ ضغط قوي عشان Base64 يدخل الشيت بدون ما يفشل
+    async function compressImageToDataUrl(file, maxW = 480, quality = 0.7) {
       const img = await new Promise((resolve, reject) => {
         const i = new Image();
         i.onload = () => resolve(i);
@@ -139,9 +139,7 @@
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0, w, h);
 
-      // JPEG أخف من PNG غالباً
-      const dataUrl = canvas.toDataURL("image/jpeg", quality);
-      return dataUrl;
+      return canvas.toDataURL("image/jpeg", quality);
     }
 
     async function submitStory() {
@@ -159,15 +157,19 @@
         const file = elPhoto.files && elPhoto.files[0];
 
         if (file) {
-          // بدال ما نرفض > منضغطها
-          const dataUrl = await compressImageToDataUrl(file, 1280, 0.82);
-          // حماية إضافية: لو بعد الضغط لسه كبيرة جداً
-          if (dataUrl.length > 2_700_000) {
+          const dataUrl = await compressImageToDataUrl(file, 480, 0.7);
+
+          // لازم يضل صغير (اللي فوق بالـ Apps Script نفس الحد)
+          if (dataUrl.length > 47000) {
             elSendBtn.disabled = false;
-            elStatus.textContent = "الصورة ما زالت كبيرة بعد الضغط. جرّبي صورة أصغر.";
+            elStatus.textContent = "الصورة كبيرة. جرّبي صورة أصغر/قصّيها قبل الرفع.";
             return;
           }
-          photoPayload = { fileName: file.name.replace(/\.[^/.]+$/, "") + ".jpg", dataUrl };
+
+          photoPayload = {
+            fileName: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
+            dataUrl
+          };
         }
 
         const payload = {
@@ -196,12 +198,9 @@
           return;
         }
 
-        const imgHtml = resp.photo_url
-          ? `<br><img src="${resp.photo_url}" style="max-width:220px;border-radius:10px;margin-top:8px;">`
-          : (photoPayload ? `<br><small>⚠️ الصورة ما انحفظت (${resp.photo_status || "unknown"})</small>` : "");
-
+        // ✅ هون: ما في أي عرض للصورة على الخريطة (نهائياً)
         L.marker(selectedLatLng).addTo(map)
-          .bindPopup(`<b>${escapeHtml(title)}</b><br>${escapeHtml(story)}${imgHtml}`);
+          .bindPopup(`<b>${escapeHtml(title)}</b><br>${escapeHtml(story)}`);
 
         showThankYou();
 
